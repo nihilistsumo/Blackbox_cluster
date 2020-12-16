@@ -160,8 +160,8 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             loss.backward()
             opt.step()
             m.eval()
-            cand_val_paired_clusters = m(X_val_data)
-            cand_val_labels = m.predict(X_val_data)
+            cand_val_paired_clusters = m(X_val_data.to(device)).detach().cpu()
+            cand_val_labels = m.predict_cluster_labels().detach().cpu()
             val_loss = mse_loss(cand_val_paired_clusters, true_val_paired_clusters)
             print("Training loss: %.5f, Val loss: %.5f, Val avg. AdjRAND: %.5f" % (loss.item(), val_loss.item(),
                                                               calculate_avg_rand(list(cand_val_labels.numpy()),

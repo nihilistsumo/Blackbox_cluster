@@ -23,7 +23,7 @@ def clustering(batch_pairscore_matrix, num_clusters):
             for j in range(p):
                 if i == j or cand_label[i] == cand_label[j]:
                     paired_cluster_matrices[b][i][j] = 1.0
-    return paired_cluster_matrices
+    return paired_cluster_matrices, cluster_labels
 
 class OptimCluster(torch.autograd.Function):
 
@@ -41,7 +41,7 @@ class OptimCluster(torch.autograd.Function):
         ctx.batch_pairscore_matrix = batch_pairscore_matrix
             # ctx.cluster_labels = np.array(maybe_parallelize(cluster_pairscores, arg_list=[ctx.pairscore_matrix, clustering]))
             # cluster_labels.append(cluster_pairscores(pairscore_matrix, num_clusters))
-        ctx.paired_cluster_matrices = clustering(ctx.batch_pairscore_matrix, num_clusters)
+        ctx.paired_cluster_matrices, _ = clustering(ctx.batch_pairscore_matrix, num_clusters)
         return torch.from_numpy(ctx.paired_cluster_matrices).float().to(ctx.batch_pairscore_matrix.device)
 
     @staticmethod
@@ -50,7 +50,7 @@ class OptimCluster(torch.autograd.Function):
         batch_pairscore_matrix_numpy = ctx.batch_pairscore_matrix.detach().cpu().numpy()
         batch_pairscore_matrix_prime = torch.from_numpy(np.maximum(
             batch_pairscore_matrix_numpy + ctx.lambda_val * grad_output_numpy, 0.0)).to(ctx.batch_pairscore_matrix.device)
-        better_paired_cluster_matrices = clustering(batch_pairscore_matrix_prime, ctx.num_clusters)
+        better_paired_cluster_matrices, _ = clustering(batch_pairscore_matrix_prime, ctx.num_clusters)
         gradient = -(ctx.paired_cluster_matrices - better_paired_cluster_matrices) / ctx.lambda_val
         return torch.from_numpy(gradient).to(ctx.batch_pairscore_matrix.device), None, None
 
@@ -114,21 +114,10 @@ class CATSCluster(nn.Module):
         self.batch_cluster_matrices = self.optim.apply(self.batch_pairscore_matrix, self.lambda_val, self.num_clusters)
         return self.batch_cluster_matrices
 
-    def predict(self, X_data):
-        num_clusters = X_data[:, 0, 0].reshape(-1)
-        batch_pairscores = self.cats(X_data[:, 1:, :]).detach()
-        num_batch = batch_pairscores.shape[0]
-        maxlen = int(np.sqrt(batch_pairscores.shape[1]))
-        batch_pairscore_matrix = batch_pairscores.reshape((num_batch, maxlen, maxlen))
-        cluster_labels = []
-        if batch_pairscore_matrix.is_cuda:
-            batch_pairscore_matrix = batch_pairscore_matrix.cpu()
-        for i in range(batch_pairscore_matrix.shape[0]):
-            clustering_algo = AgglomerativeClustering(n_clusters=int(num_clusters[i].item()), affinity='precomputed',
-                                                      linkage='average')
-            cluster_labels.append(clustering_algo.fit_predict(batch_pairscore_matrix[i]))
-        cluster_labels = torch.from_numpy(np.array(cluster_labels)).float().to(X_data.device)
-        return cluster_labels
+    def predict_cluster_labels(self):
+        _, self.cluster_labels = clustering(self.batch_pairscore_matrix, self.num_clusters)
+        self.cluster_labels = torch.from_numpy(self.cluster_labels).float().to(self.batch_pairscore_matrix.device)
+        return self.cluster_labels
 
 
     ### This forward accepts X_data of shape n X (mC2) X 3*emb ###
