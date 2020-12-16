@@ -116,15 +116,17 @@ class CATSCluster(nn.Module):
 
     def predict(self, X_data):
         num_clusters = X_data[:, 0, 0].reshape(-1)
-        batch_pairscores = self.cats(X_data[:, 1:, :]).detach().numpy()
+        batch_pairscores = self.cats(X_data[:, 1:, :]).detach()
         num_batch = batch_pairscores.shape[0]
         maxlen = int(np.sqrt(batch_pairscores.shape[1]))
         batch_pairscore_matrix = batch_pairscores.reshape((num_batch, maxlen, maxlen))
         cluster_labels = []
+        if batch_pairscore_matrix.is_cuda:
+            batch_pairscore_matrix = batch_pairscore_matrix.cpu()
         for i in range(batch_pairscore_matrix.shape[0]):
             clustering_algo = AgglomerativeClustering(n_clusters=int(num_clusters[i].item()), affinity='precomputed',
                                                       linkage='average')
-            cluster_labels.append(clustering_algo.fit_predict(batch_pairscore_matrix[i].cpu()))
+            cluster_labels.append(clustering_algo.fit_predict(batch_pairscore_matrix[i]))
         cluster_labels = np.array(cluster_labels)
         cluster_labels = torch.from_numpy(cluster_labels).float()
         cluster_labels = cluster_labels.to(X_data.device())
