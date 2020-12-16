@@ -7,6 +7,8 @@ from sklearn.cluster import AgglomerativeClustering
 
 def clustering(batch_pairscore_matrix, num_clusters):
     cluster_labels = []
+    if batch_pairscore_matrix.is_cuda:
+        batch_pairscore_matrix = batch_pairscore_matrix.cpu()
     for i in range(batch_pairscore_matrix.shape[0]):
         clustering_algo = AgglomerativeClustering(n_clusters=int(num_clusters[i].item()), affinity='precomputed', linkage='average')
         cluster_labels.append(clustering_algo.fit_predict(batch_pairscore_matrix[i]))
