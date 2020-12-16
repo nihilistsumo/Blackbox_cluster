@@ -150,6 +150,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
         for b in range(len(query_list)//batch_size + 1):
             m.train()
             opt.zero_grad()
+            torch.cuda.empty_cache()
             batch_queries = query_list[b*batch_size:(b+1)*batch_size]
             X_batch = prepare_batch(batch_queries, X_train, emb_size).to(device)
             true_paired_clusters, _ = true_cluster_labels(batch_queries, X_train)
