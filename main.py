@@ -2,7 +2,6 @@ from models import cluster
 import torch
 import torch.nn as nn
 from torch import optim
-from torch.autograd import Variable
 import numpy as np
 import random
 from sklearn.cluster import DBSCAN, KMeans
@@ -142,8 +141,6 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     true_test_labels = true_test_labels.to(device)
     m = cluster.CATSCluster(emb_size, lambda_val).to(device)
     opt = optim.Adam(m.parameters(), lr=lrate)
-    # cats_model = cats.CATS(emb_size)
-    kldiv_loss = nn.KLDivLoss()
     mse_loss = nn.MSELoss()
     for e in range(epochs):
         print("epoch "+str(e+1)+"/"+str(epochs))
@@ -155,9 +152,6 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             true_paired_clusters, _ = true_cluster_labels(batch_queries, X_train)
             true_paired_clusters = true_paired_clusters.to(device)
             cand_paired_clusters = m(X_batch)
-            # compute clustering loss between true_labels and cand_labels
-            #### for testing only ####
-            #loss = Variable(kldiv_loss(cand_batch_labels.float(), true_batch_labels.float()), requires_grad=True)
             loss = mse_loss(cand_paired_clusters, true_paired_clusters)
             loss.backward()
             opt.step()
