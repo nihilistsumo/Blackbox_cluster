@@ -169,7 +169,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             print(torch.cuda.memory_summary(device))
             if (b+1)%10 == 0:
                 num_test = X_test_data.shape[0]
-                test_batch_size = 16
+                test_batch_size = 8
                 cand_test_paired_clusters = None
                 cand_test_labels = None
                 for tb in range((num_test // test_batch_size)+1):
@@ -224,7 +224,7 @@ def main():
     parser.add_argument('-tv', '--test_pvecs', default="by1test-all-paravec-dict.npy")
     parser.add_argument('-tqv', '--test_qvecs', default="by1test-context-leadpara-qdict.npy")
     parser.add_argument('-lr', '--lrate', type=float, default=0.00001)
-    parser.add_argument('-bt', '--batch', type=int, default=16)
+    parser.add_argument('-bt', '--batch', type=int, default=8)
     parser.add_argument('-ep', '--epochs', type=int, default=3)
     parser.add_argument('-emb', '--emb_size', type=int, default=768)
     parser.add_argument('-l', '--lambda_val', type=float, default=5.0)
@@ -234,7 +234,7 @@ def main():
     args = parser.parse_args()
     dat = args.data_dir
     page_paras = read_art_qrels(dat+args.train_art_qrels)
-    val_page_paras = {k: page_paras[k] for k in random.sample(list(page_paras.keys()), 16)} #####
+    val_page_paras = {k: page_paras[k] for k in random.sample(list(page_paras.keys()), 8)} #####
     train_page_paras = {k: page_paras[k] for k in page_paras.keys() if k not in val_page_paras.keys()}
     test_page_paras = read_art_qrels(dat+args.test_art_qrels)
     train_paravec_dict = np.load(dat + args.train_pvecs, allow_pickle=True)[()]
