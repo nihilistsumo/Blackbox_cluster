@@ -158,7 +158,6 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             print(cand_paired_clusters.is_cuda)
             loss = mse_loss(cand_paired_clusters, true_paired_clusters)
             print(loss.is_cuda)
-            loss = loss.cpu()
             loss.backward()
             opt.step()
             m.eval()
