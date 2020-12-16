@@ -143,7 +143,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     m = cluster.CATSCluster(emb_size, lambda_val)
     m = m.to(device)
     opt = optim.Adam(m.parameters(), lr=lrate)
-    mse_loss = nn.MSELoss()
+    mse_loss = nn.MSELoss().to(device)
     for e in range(epochs):
         print("epoch "+str(e+1)+"/"+str(epochs))
         for b in range(len(query_list)//batch_size + 1):
