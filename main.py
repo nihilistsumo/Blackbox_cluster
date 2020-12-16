@@ -131,7 +131,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     query_list = list(X_train.keys())
     val_query_list = list(X_val.keys())
     test_query_list = list(X_test.keys())
-    test_query_list = random.sample(test_query_list, 16)
+    #test_query_list = random.sample(test_query_list, 16)
     X_val_data = prepare_batch(val_query_list, X_val, emb_size)
     true_val_paired_clusters, true_val_labels = true_cluster_labels(val_query_list, X_val)
     # true_val_labels = true_val_labels.to(device)
@@ -186,7 +186,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     m.cpu()
     m.eval()
     num_test = X_test_data.shape[0]
-    test_batch_size = 8
+    test_batch_size = 32
     cand_test_paired_clusters = None
     cand_test_labels = None
     for tb in range((num_test // test_batch_size) + 1):
@@ -207,7 +207,7 @@ def main():
     parser = argparse.ArgumentParser(description='Run CATS model')
     parser.add_argument('-dd', '--data_dir', default="/home/sk1105/sumanta/bb_cluster_data/")
 
-    '''
+    #'''
     parser.add_argument('-qtra', '--train_art_qrels', default="base.train.cbor-article.qrels")
     parser.add_argument('-qtr', '--train_qrels', default="base.train.cbor-toplevel.qrels")
     parser.add_argument('-trv', '--train_pvecs', default="y1train-all-paravec-dict.npy")
@@ -217,13 +217,13 @@ def main():
     parser.add_argument('-qtr', '--train_qrels', default="train.pages.cbor-toplevel.qrels")
     parser.add_argument('-trv', '--train_pvecs', default="by1train-all-paravec-dict.npy")
     parser.add_argument('-trqv', '--train_qvecs', default="by1train-context-leadpara-qdict.npy")
-    #'''
+    '''
     parser.add_argument('-qta', '--test_art_qrels', default="test.pages.cbor-article.qrels")
     parser.add_argument('-qt', '--test_qrels', default="test.pages.cbor-toplevel.qrels")
     parser.add_argument('-tv', '--test_pvecs', default="by1test-all-paravec-dict.npy")
     parser.add_argument('-tqv', '--test_qvecs', default="by1test-context-leadpara-qdict.npy")
     parser.add_argument('-lr', '--lrate', type=float, default=0.00001)
-    parser.add_argument('-bt', '--batch', type=int, default=8)
+    parser.add_argument('-bt', '--batch', type=int, default=32)
     parser.add_argument('-ep', '--epochs', type=int, default=3)
     parser.add_argument('-emb', '--emb_size', type=int, default=768)
     parser.add_argument('-l', '--lambda_val', type=float, default=5.0)
@@ -233,7 +233,7 @@ def main():
     args = parser.parse_args()
     dat = args.data_dir
     page_paras = read_art_qrels(dat+args.train_art_qrels)
-    val_page_paras = {k: page_paras[k] for k in random.sample(list(page_paras.keys()), 8)} #####
+    val_page_paras = {k: page_paras[k] for k in random.sample(list(page_paras.keys()), 64)} #####
     train_page_paras = {k: page_paras[k] for k in page_paras.keys() if k not in val_page_paras.keys()}
     test_page_paras = read_art_qrels(dat+args.test_art_qrels)
     train_paravec_dict = np.load(dat + args.train_pvecs, allow_pickle=True)[()]
