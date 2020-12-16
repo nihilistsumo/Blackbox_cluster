@@ -230,7 +230,7 @@ def main():
     args = parser.parse_args()
     dat = args.data_dir
     page_paras = read_art_qrels(dat+args.train_art_qrels)
-    val_page_paras = {k: page_paras[k] for k in random.sample(list(page_paras.keys()), 64)} #####
+    val_page_paras = {k: page_paras[k] for k in random.sample(list(page_paras.keys()), 32)} #####
     train_page_paras = {k: page_paras[k] for k in page_paras.keys() if k not in val_page_paras.keys()}
     test_page_paras = read_art_qrels(dat+args.test_art_qrels)
     train_paravec_dict = np.load(dat + args.train_pvecs, allow_pickle=True)[()]
