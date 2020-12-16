@@ -42,7 +42,7 @@ class OptimCluster(torch.autograd.Function):
             # ctx.cluster_labels = np.array(maybe_parallelize(cluster_pairscores, arg_list=[ctx.pairscore_matrix, clustering]))
             # cluster_labels.append(cluster_pairscores(pairscore_matrix, num_clusters))
         ctx.paired_cluster_matrices = clustering(ctx.batch_pairscore_matrix, num_clusters)
-        return torch.from_numpy(ctx.paired_cluster_matrices).float()
+        return torch.from_numpy(ctx.paired_cluster_matrices).float().to(ctx.batch_pairscore_matrix.device)
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -53,7 +53,7 @@ class OptimCluster(torch.autograd.Function):
         better_paired_cluster_matrices = clustering(batch_pairscore_matrix_prime, ctx.num_clusters)
         print("I'm here")
         gradient = -(ctx.paired_cluster_matrices - better_paired_cluster_matrices) / ctx.lambda_val
-        return torch.from_numpy(gradient), None, None
+        return torch.from_numpy(gradient).to(ctx.batch_pairscore_matrix.device), None, None
 
 class CATS(nn.Module):
     def __init__(self, emb_size):
