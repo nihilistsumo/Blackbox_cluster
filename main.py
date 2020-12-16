@@ -171,7 +171,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
                 cand_test_paired_clusters = None
                 cand_test_labels = None
                 for tb in range((num_test // test_batch_size)+1):
-                    test_batch = X_test_data[tb*test_batch_size:(tb+1)*test_batch_size,:,:]
+                    test_batch = X_test_data[tb*test_batch_size:(tb+1)*test_batch_size,:,:].to(device)
                     if cand_test_paired_clusters is None:
                         cand_test_paired_clusters = m(test_batch).detach().cpu()
                     else:
