@@ -132,13 +132,13 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     val_query_list = list(X_val.keys())
     test_query_list = list(X_test.keys())
     test_query_list = random.sample(test_query_list, 16)
-    X_val_data = prepare_batch(val_query_list, X_val, emb_size).to(device)
+    X_val_data = prepare_batch(val_query_list, X_val, emb_size)
     true_val_paired_clusters, true_val_labels = true_cluster_labels(val_query_list, X_val)
-    true_val_paired_clusters = true_val_paired_clusters.to(device)
+    true_val_paired_clusters = true_val_paired_clusters
     # true_val_labels = true_val_labels.to(device)
     X_test_data = prepare_batch(test_query_list, X_test, emb_size)
     true_test_paired_clusters, true_test_labels = true_cluster_labels(test_query_list, X_test)
-    true_test_paired_clusters = true_test_paired_clusters.to(device)
+    true_test_paired_clusters = true_test_paired_clusters
     # true_test_labels = true_test_labels.to(device)
     m = cluster.CATSCluster(emb_size, lambda_val)
     m = m.to(device)
@@ -160,11 +160,11 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             loss.backward()
             opt.step()
             m.eval()
-            cand_val_paired_clusters = m(X_val_data).to(device)
-            cand_val_labels = m.predict(X_val_data).to(device)
+            cand_val_paired_clusters = m(X_val_data)
+            cand_val_labels = m.predict(X_val_data)
             val_loss = mse_loss(cand_val_paired_clusters, true_val_paired_clusters)
             print("Training loss: %.5f, Val loss: %.5f, Val avg. AdjRAND: %.5f" % (loss.item(), val_loss.item(),
-                                                              calculate_avg_rand(list(cand_val_labels.cpu().numpy()),
+                                                              calculate_avg_rand(list(cand_val_labels.numpy()),
                                                                                  list(true_val_labels.numpy()))))
             print(torch.cuda.memory_summary(device))
             if (b+1)%10 == 0:
@@ -173,7 +173,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
                 cand_test_paired_clusters = None
                 cand_test_labels = None
                 for tb in range((num_test // test_batch_size)+1):
-                    test_batch = X_test_data[tb*test_batch_size:(tb+1)*test_batch_size,:,:].to(device)
+                    test_batch = X_test_data[tb*test_batch_size:(tb+1)*test_batch_size,:,:]
                     if cand_test_paired_clusters is None:
                         cand_test_paired_clusters = m(test_batch)
                     else:
@@ -183,7 +183,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
                     else:
                         cand_test_labels = torch.cat([cand_test_labels, m.predict(test_batch)], dim=0)
                 test_loss = mse_loss(cand_test_paired_clusters, true_test_paired_clusters).item()
-                test_adj_rand = calculate_avg_rand(list(cand_test_labels.cpu().numpy()), list(true_test_labels.numpy()))
+                test_adj_rand = calculate_avg_rand(list(cand_test_labels.numpy()), list(true_test_labels.numpy()))
                 print("Test loss: %.5f, Test avg. AdjRAND: %.5f" % (test_loss, test_adj_rand))
     m.eval()
     num_test = X_test_data.shape[0]
@@ -191,7 +191,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     cand_test_paired_clusters = None
     cand_test_labels = None
     for tb in range((num_test // test_batch_size) + 1):
-        test_batch = X_test_data[tb * test_batch_size:(tb + 1) * test_batch_size, :, :].to(device)
+        test_batch = X_test_data[tb * test_batch_size:(tb + 1) * test_batch_size, :, :]
         if cand_test_paired_clusters is None:
             cand_test_paired_clusters = m(test_batch)
         else:
@@ -201,7 +201,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
         else:
             cand_test_labels = torch.cat([cand_test_labels, m.predict(test_batch)], dim=0)
     test_loss = mse_loss(cand_test_paired_clusters, true_test_paired_clusters).item()
-    test_adj_rand = calculate_avg_rand(list(cand_test_labels.cpu().numpy()), list(true_test_labels.numpy()))
+    test_adj_rand = calculate_avg_rand(list(cand_test_labels.numpy()), list(true_test_labels.numpy()))
     print("Test loss: %.5f, Test avg. AdjRAND: %.5f" % (test_loss, test_adj_rand))
 
 def main():
