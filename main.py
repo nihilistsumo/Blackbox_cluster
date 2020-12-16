@@ -154,7 +154,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             true_paired_clusters, _ = true_cluster_labels(batch_queries, X_train)
             true_paired_clusters = true_paired_clusters.to(device)
             cand_paired_clusters = m(X_batch).to(device)
-            loss = mse_loss(cand_paired_clusters, true_paired_clusters)
+            loss = mse_loss(cand_paired_clusters, true_paired_clusters).to(device)
             loss.backward()
             opt.step()
             m.eval()
