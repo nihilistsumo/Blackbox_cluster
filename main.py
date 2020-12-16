@@ -131,6 +131,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     query_list = list(X_train.keys())
     val_query_list = list(X_val.keys())
     test_query_list = list(X_test.keys())
+    test_query_list = random.sample(test_query_list, 16)
     X_val_data = prepare_batch(val_query_list, X_val, emb_size).to(device)
     true_val_paired_clusters, true_val_labels = true_cluster_labels(val_query_list, X_val)
     true_val_paired_clusters = true_val_paired_clusters.to(device)
@@ -141,7 +142,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     # true_test_labels = true_test_labels.to(device)
     m = cluster.CATSCluster(emb_size, lambda_val).to(device)
     opt = optim.Adam(m.parameters(), lr=lrate)
-    mse_loss = nn.MSELoss().to(device)
+    mse_loss = nn.MSELoss().cuda() if torch.cuda.is_available() else nn.MSELoss()
     for e in range(epochs):
         print("epoch "+str(e+1)+"/"+str(epochs))
         for b in range(len(query_list)//batch_size + 1):
@@ -202,6 +203,8 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
 def main():
     parser = argparse.ArgumentParser(description='Run CATS model')
     parser.add_argument('-dd', '--data_dir', default="/home/sk1105/sumanta/bb_cluster_data/")
+
+    '''
     parser.add_argument('-qtra', '--train_art_qrels', default="base.train.cbor-article.qrels")
     parser.add_argument('-qtr', '--train_qrels', default="base.train.cbor-toplevel.qrels")
     parser.add_argument('-trv', '--train_pvecs', default="y1train-all-paravec-dict.npy")
@@ -211,7 +214,7 @@ def main():
     parser.add_argument('-qtr', '--train_qrels', default="train.pages.cbor-toplevel.qrels")
     parser.add_argument('-trv', '--train_pvecs', default="by1train-all-paravec-dict.npy")
     parser.add_argument('-trqv', '--train_qvecs', default="by1train-context-leadpara-qdict.npy")
-    '''
+    #'''
     parser.add_argument('-qta', '--test_art_qrels', default="test.pages.cbor-article.qrels")
     parser.add_argument('-qt', '--test_qrels', default="test.pages.cbor-toplevel.qrels")
     parser.add_argument('-tv', '--test_pvecs', default="by1test-all-paravec-dict.npy")
