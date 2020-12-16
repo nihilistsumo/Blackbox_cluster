@@ -140,9 +140,10 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     true_test_paired_clusters, true_test_labels = true_cluster_labels(test_query_list, X_test)
     true_test_paired_clusters = true_test_paired_clusters.to(device)
     # true_test_labels = true_test_labels.to(device)
-    m = cluster.CATSCluster(emb_size, lambda_val).to(device)
+    m = cluster.CATSCluster(emb_size, lambda_val)
+    m = m.to(device)
     opt = optim.Adam(m.parameters(), lr=lrate)
-    mse_loss = nn.MSELoss().cuda() if torch.cuda.is_available() else nn.MSELoss()
+    mse_loss = nn.MSELoss()
     for e in range(epochs):
         print("epoch "+str(e+1)+"/"+str(epochs))
         for b in range(len(query_list)//batch_size + 1):
@@ -153,7 +154,8 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             true_paired_clusters, _ = true_cluster_labels(batch_queries, X_train)
             true_paired_clusters = true_paired_clusters.to(device)
             cand_paired_clusters = m(X_batch)
-            print(str(m))
+            for param in m.parameters():
+                print(param)
             print(str(X_batch))
             loss = mse_loss(cand_paired_clusters, true_paired_clusters)
             loss.backward()
