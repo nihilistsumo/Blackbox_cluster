@@ -83,10 +83,16 @@ def prepare_batch(batch_queries, X_data, emb_size):
     X_batch = []
     true_batch_labels = []
     max_paralist_len = max([len(X_data[q]) - 1 for q in batch_queries])
+    num_paras = []
+    num_k = []
+    mean_para_per_k = []
     for q in batch_queries:
         #print(q)
         true_batch_label = [d[2] for d in X_data[q][1:]] + [-1] * (max_paralist_len - len(X_data[q][1:]))
         num_clusters = len(list(set(true_batch_label)))
+        num_paras.append(len(X_data[q][1:]))
+        num_k.append(num_clusters)
+        mean_para_per_k.append(len(X_data[q][1:])/num_clusters)
         true_batch_labels.append(true_batch_label)
         qvec = X_data[q][0]
         paraids = []
@@ -116,7 +122,8 @@ def prepare_batch(batch_queries, X_data, emb_size):
                     parapair_ids.append(paraids[i] + '_' + paraids[j])
         X_batch.append(X_cats)
     X_batch = np.array(X_batch)
-    return torch.from_numpy(X_batch).float()
+    stats = [np.mean(num_paras), np.std(num_paras), np.mean(num_k), np.std(num_k), np.mean(mean_para_per_k), np.std(mean_para_per_k)]
+    return torch.from_numpy(X_batch).float(), stats
 
 def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lambda_val, lrate):
     # X_train/val/test: The dataset will be of the following format
@@ -132,10 +139,16 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     val_query_list = list(X_val.keys())
     test_query_list = list(X_test.keys())
     #test_query_list = random.sample(test_query_list, 16)
-    X_val_data = prepare_batch(val_query_list, X_val, emb_size)
+    X_val_data, val_stats = prepare_batch(val_query_list, X_val, emb_size)
+    print("Val data mean para %.3f (%.3f), mean k %.3f (%.3f), mean para/k %.3f (%.3f)" % (val_stats[0], val_stats[1],
+                                                                                           val_stats[2], val_stats[3],
+                                                                                           val_stats[4], val_stats[5]))
     true_val_paired_clusters, true_val_labels = true_cluster_labels(val_query_list, X_val)
     # true_val_labels = true_val_labels.to(device)
-    X_test_data = prepare_batch(test_query_list, X_test, emb_size)
+    X_test_data, test_stats = prepare_batch(test_query_list, X_test, emb_size)
+    print("Test data mean para %.3f (%.3f), mean k %.3f (%.3f), mean para/k %.3f (%.3f)" % (test_stats[0], test_stats[1],
+                                                                                           test_stats[2], test_stats[3],
+                                                                                           test_stats[4], test_stats[5]))
     true_test_paired_clusters, true_test_labels = true_cluster_labels(test_query_list, X_test)
     # true_test_labels = true_test_labels.to(device)
     m = cluster.CATSCluster(emb_size, lambda_val)
@@ -152,7 +165,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             opt.zero_grad()
             torch.cuda.empty_cache()
             batch_queries = query_list[b*batch_size:(b+1)*batch_size]
-            X_batch = prepare_batch(batch_queries, X_train, emb_size).to(device)
+            X_batch, stats = prepare_batch(batch_queries, X_train, emb_size).to(device)
             true_paired_clusters, _ = true_cluster_labels(batch_queries, X_train)
             true_paired_clusters = true_paired_clusters.to(device)
             cand_paired_clusters = m(X_batch).to(device)
@@ -164,9 +177,11 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             cand_val_paired_clusters = m(X_val_data).detach()
             cand_val_labels = m.predict_cluster_labels().detach()
             val_loss = mse_loss(cand_val_paired_clusters, true_val_paired_clusters)
-            print("Batch %d/%d Training loss: %.5f, Val loss: %.5f, Val avg. AdjRAND: %.5f" % (b+1, num_batch, loss.item(), val_loss.item(),
-                                                              calculate_avg_rand(list(cand_val_labels.numpy()),
-                                                                                 list(true_val_labels.numpy()))))
+            print("Batch %d/%d mp %.3f (%.3f), mk %.3f (%.3f), mp/k %.3f (%.3f), Training loss: %.5f, Val loss: %.5f, "
+                  "Val avg. AdjRAND: %.5f" % (b+1, num_batch, stats[0], stats[1], stats[2], stats[3], stats[4],
+                                              stats[5], loss.item(), val_loss.item(),
+                                              calculate_avg_rand(list(cand_val_labels.numpy()),
+                                                                 list(true_val_labels.numpy()))))
             if (b+1)%100 == 0:
                 num_test = X_test_data.shape[0]
                 test_batch_size = 8
