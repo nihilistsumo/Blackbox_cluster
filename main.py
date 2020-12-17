@@ -122,7 +122,9 @@ def prepare_batch(batch_queries, X_data, emb_size):
                     parapair_ids.append(paraids[i] + '_' + paraids[j])
         X_batch.append(X_cats)
     X_batch = np.array(X_batch)
-    stats = [np.mean(num_paras), np.std(num_paras), np.mean(num_k), np.std(num_k), np.mean(mean_para_per_k), np.std(mean_para_per_k)]
+    stats = [np.mean(num_paras), np.std(num_paras)/np.sqrt(len(batch_queries)), np.mean(num_k),
+             np.std(num_k)/np.sqrt(len(batch_queries)), np.mean(mean_para_per_k),
+             np.std(mean_para_per_k)/np.sqrt(len(batch_queries))]
     return torch.from_numpy(X_batch).float(), stats
 
 def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lambda_val, lrate):
@@ -140,13 +142,13 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     test_query_list = list(X_test.keys())
     #test_query_list = random.sample(test_query_list, 16)
     X_val_data, val_stats = prepare_batch(val_query_list, X_val, emb_size)
-    print("Val data mean para %.3f (%.3f), mean k %.3f (%.3f), mean para/k %.3f (%.3f)" % (val_stats[0], val_stats[1],
+    print("Val data mean para (serr) %.2f (%.2f), mean k (serr) %.2f (%.2f), mean para/k (serr) %.2f (%.2f)" % (val_stats[0], val_stats[1],
                                                                                            val_stats[2], val_stats[3],
                                                                                            val_stats[4], val_stats[5]))
     true_val_paired_clusters, true_val_labels = true_cluster_labels(val_query_list, X_val)
     # true_val_labels = true_val_labels.to(device)
     X_test_data, test_stats = prepare_batch(test_query_list, X_test, emb_size)
-    print("Test data mean para %.3f (%.3f), mean k %.3f (%.3f), mean para/k %.3f (%.3f)" % (test_stats[0], test_stats[1],
+    print("Test data mean para (serr) %.2f (%.2f), mean k (serr) %.2f (%.2f), mean para/k (serr) %.2f (%.2f)" % (test_stats[0], test_stats[1],
                                                                                            test_stats[2], test_stats[3],
                                                                                            test_stats[4], test_stats[5]))
     true_test_paired_clusters, true_test_labels = true_cluster_labels(test_query_list, X_test)
@@ -178,7 +180,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             cand_val_paired_clusters = m(X_val_data).detach()
             cand_val_labels = m.predict_cluster_labels().detach()
             val_loss = mse_loss(cand_val_paired_clusters, true_val_paired_clusters)
-            print("Batch %d/%d mp %.3f (%.3f), mk %.3f (%.3f), mp/k %.3f (%.3f), Training loss: %.5f, Val loss: %.5f, "
+            print("Batch %d/%d mp(serr) %.2f (%.2f), mk(serr) %.2f (%.2f), mp/k(serr) %.2f (%.2f), Training loss: %.5f, Val loss: %.5f, "
                   "Val avg. AdjRAND: %.5f" % (b+1, num_batch, stats[0], stats[1], stats[2], stats[3], stats[4],
                                               stats[5], loss.item(), val_loss.item(),
                                               calculate_avg_rand(list(cand_val_labels.numpy()),
