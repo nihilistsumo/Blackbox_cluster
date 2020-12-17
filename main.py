@@ -140,7 +140,8 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     # true_test_labels = true_test_labels.to(device)
     m = cluster.CATSCluster(emb_size, lambda_val)
     m = m.to(device)
-    opt = optim.Adam(m.parameters(), lr=lrate)
+    #opt = optim.Adam(m.parameters(), lr=lrate)
+    opt = optim.RMSprop(m.parameters(), lr=lrate)
     mse_loss = nn.MSELoss().to(device)
     for e in range(epochs):
         print("epoch "+str(e+1)+"/"+str(epochs))
