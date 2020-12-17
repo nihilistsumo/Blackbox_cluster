@@ -144,7 +144,8 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     mse_loss = nn.MSELoss().to(device)
     for e in range(epochs):
         print("epoch "+str(e+1)+"/"+str(epochs))
-        for b in range(len(query_list)//batch_size + 1):
+        num_batch = len(query_list)//batch_size + 1
+        for b in range(num_batch):
             m = m.to(device)
             m.train()
             opt.zero_grad()
@@ -162,10 +163,10 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             cand_val_paired_clusters = m(X_val_data).detach()
             cand_val_labels = m.predict_cluster_labels().detach()
             val_loss = mse_loss(cand_val_paired_clusters, true_val_paired_clusters)
-            print("Training loss: %.5f, Val loss: %.5f, Val avg. AdjRAND: %.5f" % (loss.item(), val_loss.item(),
+            print("Batch %d/%d Training loss: %.5f, Val loss: %.5f, Val avg. AdjRAND: %.5f" % (b+1, num_batch, loss.item(), val_loss.item(),
                                                               calculate_avg_rand(list(cand_val_labels.numpy()),
                                                                                  list(true_val_labels.numpy()))))
-            if (b+1)%10 == 0:
+            if (b+1)%100 == 0:
                 num_test = X_test_data.shape[0]
                 test_batch_size = 8
                 cand_test_paired_clusters = None
