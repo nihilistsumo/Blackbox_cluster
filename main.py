@@ -31,35 +31,38 @@ def read_art_qrels(art_qrels):
                 page_paras[q].append(p)
     return page_paras
 
-def build_data(page_paras, qrels, paravec_dict, qvec_dict, min_num_paras=10, min_nump_k=2.0, max_nump_k=4.0):
+def build_data(page_paras, qrels, paravec_dict, qvec_dict, is_test=False, min_num_paras=10, min_nump_k=2.0, max_nump_k=4.0):
     rev_para_label_dict = {}
-    selected_pages = [p for p in page_paras.keys() if 'Query:' + sha1(str.encode(p)).hexdigest() in qvec_dict.keys() and
-                   len(page_paras[p]) >= min_num_paras]
     with open(qrels, 'r') as q:
         for l in q:
             rev_para_label_dict[l.split(' ')[2]] = l.split(' ')[0]
+    selected_pages = []
+    if is_test:
+        selected_pages = list(page_paras.keys())
+    else:
+        for p in page_paras.keys():
+            num_paras = len(page_paras[p])
+            labels = list(set([rev_para_label_dict[p] for p in page_paras[p]]))
+            nump_k = num_paras / len(labels)
+            if 'Query:' + sha1(str.encode(p)).hexdigest() in qvec_dict.keys() and num_paras >= min_num_paras and \
+                    nump_k < max_nump_k and nump_k > min_nump_k:
+                selected_pages.append(p)
+    sorted_pages = sorted(selected_pages, key=lambda k: len(page_paras[k]))
     X_data = {}
-    sorted_pages = sorted(selected_pages, key=lambda k:len(page_paras[k]))
-    pages = 0
     for page in sorted_pages:
         qid = 'Query:' + sha1(str.encode(page)).hexdigest()
         qvec = qvec_dict[qid]
         X_data[page] = [qvec]
-        num_paras = len(page_paras[page])
         labels = list(set([rev_para_label_dict[p] for p in page_paras[page]]))
-        nump_k = num_paras/len(labels)
-        if nump_k > max_nump_k or nump_k < min_nump_k:
-            continue
         for p in page_paras[page]:
             if p not in paravec_dict.keys():
-                print(p + " not in para embedding data, skipping...")
+                print(p + " not in para embedding data from page "+page+", skipping...")
                 continue
             pvec = paravec_dict[p]
             plabel = labels.index(rev_para_label_dict[p])
             X_data[page].append((p, pvec, plabel))
         # print(page)
-        pages += 1
-    print("Total " + str(pages) + " pages")
+    print("Total " + str(len(sorted_pages)) + " pages")
     return X_data
 
 def calculate_avg_rand(cand_labels, true_labels):
@@ -259,16 +262,17 @@ def main():
     args = parser.parse_args()
     dat = args.data_dir
     page_paras = read_art_qrels(dat+args.train_art_qrels)
-    val_page_paras = {k: page_paras[k] for k in random.sample(list(page_paras.keys()), 64)} #####
-    train_page_paras = {k: page_paras[k] for k in page_paras.keys() if k not in val_page_paras.keys()}
+    #val_page_paras = {k: page_paras[k] for k in random.sample(list(page_paras.keys()), 64)} #####
+    #train_page_paras = {k: page_paras[k] for k in page_paras.keys() if k not in val_page_paras.keys()}
     test_page_paras = read_art_qrels(dat+args.test_art_qrels)
     train_paravec_dict = np.load(dat + args.train_pvecs, allow_pickle=True)[()]
     test_paravec_dict = np.load(dat + args.test_pvecs, allow_pickle=True)[()]
     train_qvec_dict = np.load(dat + args.train_qvecs, allow_pickle=True)[()]
     test_qvec_dict = np.load(dat + args.test_qvecs, allow_pickle=True)[()]
     print("Embedding vectors loaded, going to build data with articles having at least 10 passages")
-    X_train = build_data(train_page_paras, dat+args.train_qrels, train_paravec_dict, train_qvec_dict)
-    X_val = build_data(val_page_paras, dat + args.train_qrels, train_paravec_dict, train_qvec_dict)
+    X_data = build_data(page_paras, dat+args.train_qrels, train_paravec_dict, train_qvec_dict)
+    X_val = {k:X_data[k] for k in random.sample(list(X_data.keys()), 64)}
+    X_train = {k:X_data[k] for k in X_data.keys() if k not in X_val.keys()}
     X_test = build_data(test_page_paras, dat + args.test_qrels, test_paravec_dict, test_qvec_dict) #####
     # X_test = {k:X_test[k] for k in random.sample(X_test.keys(), 16)} #####
     print("Dataset built, going to start training")
