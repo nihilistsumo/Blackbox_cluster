@@ -273,7 +273,7 @@ def main():
     X_data = build_data(page_paras, dat+args.train_qrels, train_paravec_dict, train_qvec_dict)
     X_val = {k:X_data[k] for k in random.sample(list(X_data.keys()), 64)}
     X_train = {k:X_data[k] for k in X_data.keys() if k not in X_val.keys()}
-    X_test = build_data(test_page_paras, dat + args.test_qrels, test_paravec_dict, test_qvec_dict) #####
+    X_test = build_data(test_page_paras, dat + args.test_qrels, test_paravec_dict, test_qvec_dict, True) #####
     # X_test = {k:X_test[k] for k in random.sample(X_test.keys(), 16)} #####
     print("Dataset built, going to start training")
     train_cats_cluster(X_train, X_val, X_test, args.batch, args.epochs, args.emb_size, args.lambda_val, args.lrate)
