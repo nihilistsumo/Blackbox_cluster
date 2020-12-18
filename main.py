@@ -174,7 +174,6 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             m = m.to(device)
             m.train()
             opt.zero_grad()
-            torch.cuda.empty_cache()
             batch_queries = query_list[b*batch_size:(b+1)*batch_size]
             X_batch, stats = prepare_batch(batch_queries, X_train, emb_size)
             X_batch = X_batch.to(device)
