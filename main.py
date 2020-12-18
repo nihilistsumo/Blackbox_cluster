@@ -31,21 +31,25 @@ def read_art_qrels(art_qrels):
                 page_paras[q].append(p)
     return page_paras
 
-def build_data(page_paras, qrels, paravec_dict, qvec_dict):
+def build_data(page_paras, qrels, paravec_dict, qvec_dict, min_num_paras=10, min_nump_k=2.0, max_nump_k=4.0):
     rev_para_label_dict = {}
     selected_pages = [p for p in page_paras.keys() if 'Query:' + sha1(str.encode(p)).hexdigest() in qvec_dict.keys() and
-                   len(page_paras[p]) > 9]
-    print("Total "+str(len(selected_pages))+" pages")
+                   len(page_paras[p]) >= min_num_paras]
     with open(qrels, 'r') as q:
         for l in q:
             rev_para_label_dict[l.split(' ')[2]] = l.split(' ')[0]
     X_data = {}
     sorted_pages = sorted(selected_pages, key=lambda k:len(page_paras[k]))
+    pages = 0
     for page in sorted_pages:
         qid = 'Query:' + sha1(str.encode(page)).hexdigest()
         qvec = qvec_dict[qid]
         X_data[page] = [qvec]
+        num_paras = len(page_paras[p])
         labels = list(set([rev_para_label_dict[p] for p in page_paras[page]]))
+        nump_k = num_paras/len(labels)
+        if nump_k > max_nump_k or nump_k < min_nump_k:
+            continue
         for p in page_paras[page]:
             if p not in paravec_dict.keys():
                 print(p + " not in para embedding data, skipping...")
@@ -54,6 +58,8 @@ def build_data(page_paras, qrels, paravec_dict, qvec_dict):
             plabel = labels.index(rev_para_label_dict[p])
             X_data[page].append((p, pvec, plabel))
         # print(page)
+        pages += 1
+    print("Total " + str(pages) + " pages")
     return X_data
 
 def calculate_avg_rand(cand_labels, true_labels):
@@ -155,8 +161,8 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     # true_test_labels = true_test_labels.to(device)
     m = cluster.CATSCluster(emb_size, lambda_val)
     m = m.to(device)
-    #opt = optim.Adam(m.parameters(), lr=lrate)
-    opt = optim.RMSprop(m.parameters(), lr=lrate)
+    opt = optim.Adam(m.parameters(), lr=lrate)
+    #opt = optim.RMSprop(m.parameters(), lr=lrate)
     mse_loss = nn.MSELoss().to(device)
     for e in range(epochs):
         print("epoch "+str(e+1)+"/"+str(epochs))
