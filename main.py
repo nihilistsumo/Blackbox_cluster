@@ -45,7 +45,7 @@ def build_data(page_paras, qrels, paravec_dict, qvec_dict, min_num_paras=10, min
         qid = 'Query:' + sha1(str.encode(page)).hexdigest()
         qvec = qvec_dict[qid]
         X_data[page] = [qvec]
-        num_paras = len(page_paras[p])
+        num_paras = len(page_paras[page])
         labels = list(set([rev_para_label_dict[p] for p in page_paras[page]]))
         nump_k = num_paras/len(labels)
         if nump_k > max_nump_k or nump_k < min_nump_k:
