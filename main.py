@@ -248,6 +248,7 @@ def main():
     parser.add_argument('-tqv', '--test_qvecs', default="by1test-context-leadpara-qdict.npy")
     parser.add_argument('-lr', '--lrate', type=float, default=0.00001)
     parser.add_argument('-bt', '--batch', type=int, default=32)
+    parser.add_argument('-vb', '--val_size', type=int, default=32)
     parser.add_argument('-ep', '--epochs', type=int, default=3)
     parser.add_argument('-emb', '--emb_size', type=int, default=768)
     parser.add_argument('-l', '--lambda_val', type=float, default=5.0)
@@ -266,7 +267,7 @@ def main():
     test_qvec_dict = np.load(dat + args.test_qvecs, allow_pickle=True)[()]
     print("Embedding vectors loaded, going to build data with articles having at least 10 passages")
     X_data = build_data(page_paras, dat+args.train_qrels, train_paravec_dict, train_qvec_dict)
-    X_val = {k:X_data[k] for k in random.sample(list(X_data.keys()), 64)}
+    X_val = {k:X_data[k] for k in random.sample(list(X_data.keys()), args.val_size)}
     X_train = {k:X_data[k] for k in X_data.keys() if k not in X_val.keys()}
     X_test = build_data(test_page_paras, dat + args.test_qrels, test_paravec_dict, test_qvec_dict, True) #####
     # X_test = {k:X_test[k] for k in random.sample(X_test.keys(), 16)} #####
