@@ -31,7 +31,7 @@ def read_art_qrels(art_qrels):
                 page_paras[q].append(p)
     return page_paras
 
-def build_data(page_paras, qrels, paravec_dict, qvec_dict, is_test=False, min_num_paras=10, min_nump_k=2.0, max_nump_k=4.0):
+def build_data(page_paras, qrels, paravec_dict, qvec_dict, nosort, is_test=False, min_num_paras=10, min_nump_k=2.0, max_nump_k=4.0):
     rev_para_label_dict = {}
     with open(qrels, 'r') as q:
         for l in q:
@@ -47,7 +47,10 @@ def build_data(page_paras, qrels, paravec_dict, qvec_dict, is_test=False, min_nu
             if 'Query:' + sha1(str.encode(p)).hexdigest() in qvec_dict.keys() and num_paras >= min_num_paras and \
                     nump_k < max_nump_k and nump_k > min_nump_k:
                 selected_pages.append(p)
-    sorted_pages = sorted(selected_pages, key=lambda k: len(page_paras[k]))
+    if nosort:
+        sorted_pages = selected_pages
+    else:
+        sorted_pages = sorted(selected_pages, key=lambda k: len(page_paras[k]))
     X_data = {}
     for page in sorted_pages:
         qid = 'Query:' + sha1(str.encode(page)).hexdigest()
@@ -251,6 +254,7 @@ def main():
     parser.add_argument('-ep', '--epochs', type=int, default=3)
     parser.add_argument('-emb', '--emb_size', type=int, default=768)
     parser.add_argument('-l', '--lambda_val', type=float, default=5.0)
+    parser.add_argument('--nosort', action='store_true')
     parser.add_argument('--cache', action='store_true')
     parser.add_argument('--save', action='store_true')
 
@@ -265,11 +269,11 @@ def main():
     train_qvec_dict = np.load(dat + args.train_qvecs, allow_pickle=True)[()]
     test_qvec_dict = np.load(dat + args.test_qvecs, allow_pickle=True)[()]
     print("Embedding vectors loaded, going to build data with articles having at least 10 passages")
-    X_data = build_data(page_paras, dat+args.train_qrels, train_paravec_dict, train_qvec_dict)
+    X_data = build_data(page_paras, dat+args.train_qrels, train_paravec_dict, train_qvec_dict, args.nosort)
     X_val = {k:X_data[k] for k in random.sample(list(X_data.keys()), args.val_size)}
     X_train = {k:X_data[k] for k in X_data.keys() if k not in X_val.keys()}
-    X_test = build_data(test_page_paras, dat + args.test_qrels, test_paravec_dict, test_qvec_dict, True) #####
-    # X_test = {k:X_test[k] for k in random.sample(X_test.keys(), 16)} #####
+    X_test = build_data(test_page_paras, dat + args.test_qrels, test_paravec_dict, test_qvec_dict, args.nosort, True) #####
+    X_test = {k:X_test[k] for k in random.sample(X_test.keys(), 32)} #####
     print("Dataset built, going to start training")
     train_cats_cluster(X_train, X_val, X_test, args.batch, args.epochs, args.emb_size, args.lambda_val, args.lrate)
 
