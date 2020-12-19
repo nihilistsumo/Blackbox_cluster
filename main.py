@@ -196,7 +196,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
                                               stats[5], loss.item(), val_loss.item(),
                                               calculate_avg_rand(list(cand_val_labels.numpy()),
                                                                  list(true_val_labels.numpy()))))
-            if (b+1)%100 == 0:
+            if (b+1)%1000 == 0:
                 cand_test_paired_clusters = m(X_test_data).detach()
                 cand_test_labels = m.predict_cluster_labels().detach()
                 test_loss = mse_loss(cand_test_paired_clusters, true_test_paired_clusters).item()
@@ -253,7 +253,7 @@ def main():
     parser.add_argument('-vb', '--val_size', type=int, default=32)
     parser.add_argument('-ep', '--epochs', type=int, default=3)
     parser.add_argument('-emb', '--emb_size', type=int, default=768)
-    parser.add_argument('-l', '--lambda_val', type=float, default=5.0)
+    parser.add_argument('-l', '--lambda_val', type=float, default=100.0)
     parser.add_argument('--nosort', action='store_true')
     parser.add_argument('--cache', action='store_true')
     parser.add_argument('--save', action='store_true')
@@ -273,7 +273,7 @@ def main():
     X_val = {k:X_data[k] for k in random.sample(list(X_data.keys()), args.val_size)}
     X_train = {k:X_data[k] for k in X_data.keys() if k not in X_val.keys()}
     X_test = build_data(test_page_paras, dat + args.test_qrels, test_paravec_dict, test_qvec_dict, args.nosort, True) #####
-    X_test = {k:X_test[k] for k in random.sample(X_test.keys(), 32)} #####
+    #X_test = {k:X_test[k] for k in random.sample(X_test.keys(), 32)} #####
     print("Dataset built, going to start training")
     train_cats_cluster(X_train, X_val, X_test, args.batch, args.epochs, args.emb_size, args.lambda_val, args.lrate)
 
