@@ -202,13 +202,16 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             print("Batch %d/%d mp(serr) %.2f (%.2f), mk(serr) %.2f (%.2f), mp/k(serr) %.2f (%.2f), Training loss: %.5f, Val loss: %.5f, "
                   "Val avg. AdjRAND: %.5f" % (b+1, num_batch, stats[0], stats[1], stats[2], stats[3], stats[4],
                                               stats[5], loss.item(), val_loss.item(), val_rand))
-            if b > init_batch_num and val_rand > best_val_rand:
-                best_val_rand = val_rand
-                since_best_val = 0
-            if b > init_batch_num and since_best_val > patience:
-                print("Val score not improving, stopping early...")
-                early_stopped = True
-                break
+            if b > init_batch_num:
+                if val_rand > best_val_rand:
+                    best_val_rand = val_rand
+                    since_best_val = 0
+                elif since_best_val > patience:
+                    print("Val score not improving, stopping early...")
+                    early_stopped = True
+                    break
+                else:
+                    since_best_val += 1
             '''
             if (b+1)%100 == 0:
                 cand_test_paired_clusters = m(X_test_data).detach()
