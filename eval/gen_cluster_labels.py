@@ -48,7 +48,7 @@ def save_cluster_labels(model_path, cluster_label_path, art_qrels, qrels, parave
     adj_rand = utils.calculate_avg_rand(list(cand_labels.numpy()), list(true_labels.numpy()))
     print("Avg. AdjRAND: %.5f" % (adj_rand))
     with open(cluster_label_path, 'w') as f:
-        json.dump({'X_data':X_data, 'labels':cand_labels.tolist()})
+        json.dump({'X_data':X_data, 'labels':cand_labels.tolist()}, f)
 
 def main():
     parser = argparse.ArgumentParser(description='Save cluster labels')

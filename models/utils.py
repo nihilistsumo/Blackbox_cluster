@@ -67,8 +67,8 @@ def prepare_batch(batch_queries, X_data, emb_size):
 def calculate_avg_rand(cand_labels, true_labels):
     avg_rand = 0
     for i in range(len(cand_labels)):
-        gt = [l for l in true_labels[i]]
-        cand = [l for l in cand_labels[i]]
+        gt = [l for l in true_labels[i] if l > 0]
+        cand = [l for l in cand_labels[i][:len(gt)]]
         avg_rand += adjusted_rand_score(gt, cand)
     avg_rand = avg_rand / len(cand_labels)
     return avg_rand
