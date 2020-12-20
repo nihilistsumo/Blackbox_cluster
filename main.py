@@ -58,7 +58,7 @@ def build_data(page_paras, qrels, paravec_dict, qvec_dict, nosort, is_test=False
     print("Total " + str(len(sorted_pages)) + " pages")
     return X_data
 
-def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lambda_val, lrate, save):
+def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lambda_val, lrate, save, early_stop_b):
     # X_train/val/test: The dataset will be of the following format
     # {query: [query_vec, (pid1, para vec 1, label 1), (pid2, para vec 2, label 2), ...]} without padding
     device = None
@@ -89,10 +89,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     opt = optim.Adam(m.parameters(), lr=lrate)
     #opt = optim.RMSprop(m.parameters(), lr=lrate)
     mse_loss = nn.MSELoss().to(device)
-    best_val_rand = 0
-    since_best_val = 0
     early_stopped = False
-    patience = 100
     init_batch_num = 100
     for e in range(epochs):
         print("epoch "+str(e+1)+"/"+str(epochs))
@@ -119,16 +116,10 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             print("Batch %d/%d mp(serr) %.2f (%.2f), mk(serr) %.2f (%.2f), mp/k(serr) %.2f (%.2f), Training loss: %.5f, Val loss: %.5f, "
                   "Val avg. AdjRAND: %.5f" % (b+1, num_batch, stats[0], stats[1], stats[2], stats[3], stats[4],
                                               stats[5], loss.item(), val_loss.item(), val_rand))
-            if b > init_batch_num:
-                if val_rand > best_val_rand:
-                    best_val_rand = val_rand
-                    since_best_val = 0
-                elif since_best_val > patience:
-                    print("Val score not improving, stopping early...")
-                    early_stopped = True
-                    break
-                else:
-                    since_best_val += 1
+            if b > init_batch_num and early_stop_b > 0 and b >= early_stop_b:
+                print("Reached at desired epoch/batch num, stopping early...")
+                early_stopped = True
+                break
             '''
             if (b+1)%100 == 0:
                 cand_test_paired_clusters = m(X_test_data).detach()
@@ -176,6 +167,7 @@ def main():
     parser.add_argument('-ep', '--epochs', type=int, default=3)
     parser.add_argument('-emb', '--emb_size', type=int, default=768)
     parser.add_argument('-l', '--lambda_val', type=float, default=100.0)
+    parser.add_argument('-es', '--early_stop_b', type=int, default=-1)
     parser.add_argument('--nosort', action='store_true')
     parser.add_argument('--cache', action='store_true')
     parser.add_argument('--save', action='store_true')
@@ -197,7 +189,8 @@ def main():
     X_test = build_data(test_page_paras, dat + args.test_qrels, test_paravec_dict, test_qvec_dict, args.nosort, True) #####
     #X_test = {k:X_test[k] for k in random.sample(X_test.keys(), 32)} #####
     print("Dataset built, going to start training")
-    train_cats_cluster(X_train, X_val, X_test, args.batch, args.epochs, args.emb_size, args.lambda_val, args.lrate, args.save)
+    train_cats_cluster(X_train, X_val, X_test, args.batch, args.epochs, args.emb_size, args.lambda_val, args.lrate,
+                       args.save, args.early_stop_b)
 
 
 if __name__ == '__main__':
