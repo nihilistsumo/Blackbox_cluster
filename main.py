@@ -4,6 +4,8 @@ import torch.nn as nn
 from torch import optim
 import numpy as np
 import random
+import os
+import time
 from sklearn.cluster import DBSCAN, KMeans
 from sklearn.metrics import adjusted_rand_score
 import argparse
@@ -139,7 +141,7 @@ def prepare_batch(batch_queries, X_data, emb_size):
              np.std(mean_para_per_k)/np.sqrt(len(batch_queries))]
     return torch.from_numpy(X_batch).float(), stats
 
-def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lambda_val, lrate):
+def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lambda_val, lrate, save):
     # X_train/val/test: The dataset will be of the following format
     # {query: [query_vec, (pid1, para vec 1, label 1), (pid2, para vec 2, label 2), ...]} without padding
     device = None
@@ -170,6 +172,11 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     opt = optim.Adam(m.parameters(), lr=lrate)
     #opt = optim.RMSprop(m.parameters(), lr=lrate)
     mse_loss = nn.MSELoss().to(device)
+    best_val_rand = 0
+    since_best_val = 0
+    early_stopped = False
+    patience = 50
+    init_batch_num = 100
     for e in range(epochs):
         print("epoch "+str(e+1)+"/"+str(epochs))
         num_batch = len(query_list)//batch_size + 1
@@ -191,36 +198,27 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             cand_val_paired_clusters = m(X_val_data).detach()
             cand_val_labels = m.predict_cluster_labels().detach()
             val_loss = mse_loss(cand_val_paired_clusters, true_val_paired_clusters)
+            val_rand = calculate_avg_rand(list(cand_val_labels.numpy()), list(true_val_labels.numpy()))
             print("Batch %d/%d mp(serr) %.2f (%.2f), mk(serr) %.2f (%.2f), mp/k(serr) %.2f (%.2f), Training loss: %.5f, Val loss: %.5f, "
                   "Val avg. AdjRAND: %.5f" % (b+1, num_batch, stats[0], stats[1], stats[2], stats[3], stats[4],
-                                              stats[5], loss.item(), val_loss.item(),
-                                              calculate_avg_rand(list(cand_val_labels.numpy()),
-                                                                 list(true_val_labels.numpy()))))
-            if (b+1)%1000 == 0:
+                                              stats[5], loss.item(), val_loss.item(), val_rand))
+            if b > init_batch_num and val_rand > best_val_rand:
+                best_val_rand = val_rand
+                since_best_val = 0
+            if b > init_batch_num and since_best_val > patience:
+                print("Val score not improving, stopping early...")
+                early_stopped = True
+                break
+            '''
+            if (b+1)%100 == 0:
                 cand_test_paired_clusters = m(X_test_data).detach()
                 cand_test_labels = m.predict_cluster_labels().detach()
                 test_loss = mse_loss(cand_test_paired_clusters, true_test_paired_clusters).item()
                 test_adj_rand = calculate_avg_rand(list(cand_test_labels.numpy()), list(true_test_labels.numpy()))
                 print("Test loss: %.5f, Test avg. AdjRAND: %.5f" % (test_loss, test_adj_rand))
-                '''
-                num_test = X_test_data.shape[0]
-                test_batch_size = 8
-                cand_test_paired_clusters = None
-                cand_test_labels = None
-                for tb in range((num_test // test_batch_size)+1):
-                    test_batch = X_test_data[tb*test_batch_size:(tb+1)*test_batch_size,:,:]
-                    if cand_test_paired_clusters is None:
-                        cand_test_paired_clusters = m(test_batch).detach()
-                    else:
-                        cand_test_paired_clusters = torch.cat([cand_test_paired_clusters, m(test_batch).detach()], dim=0)
-                    if cand_test_labels is None:
-                        cand_test_labels = m.predict_cluster_labels().detach()
-                    else:
-                        cand_test_labels = torch.cat([cand_test_labels, m.predict_cluster_labels().detach()], dim=0)
-                test_loss = mse_loss(cand_test_paired_clusters, true_test_paired_clusters).item()
-                test_adj_rand = calculate_avg_rand(list(cand_test_labels.numpy()), list(true_test_labels.numpy()))
-                print("Test loss: %.5f, Test avg. AdjRAND: %.5f" % (test_loss, test_adj_rand))
-                '''
+            '''
+        if early_stopped:
+            break
     m.cpu()
     m.eval()
     cand_test_paired_clusters = m(X_test_data).detach()
@@ -228,6 +226,10 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     test_loss = mse_loss(cand_test_paired_clusters, true_test_paired_clusters).item()
     test_adj_rand = calculate_avg_rand(list(cand_test_labels.numpy()), list(true_test_labels.numpy()))
     print("Test loss: %.5f, Test avg. AdjRAND: %.5f" % (test_loss, test_adj_rand))
+    if save:
+        if not os.path.isdir('saved_models'):
+            os.makedirs('saved_models')
+        torch.save(m.state_dict(), 'saved_models/'+time.strftime('%b-%d-%Y_%H%M', time.localtime())+'.model')
 
 def main():
     parser = argparse.ArgumentParser(description='Run CATS model')
@@ -275,7 +277,7 @@ def main():
     X_test = build_data(test_page_paras, dat + args.test_qrels, test_paravec_dict, test_qvec_dict, args.nosort, True) #####
     #X_test = {k:X_test[k] for k in random.sample(X_test.keys(), 32)} #####
     print("Dataset built, going to start training")
-    train_cats_cluster(X_train, X_val, X_test, args.batch, args.epochs, args.emb_size, args.lambda_val, args.lrate)
+    train_cats_cluster(X_train, X_val, X_test, args.batch, args.epochs, args.emb_size, args.lambda_val, args.lrate, args.save)
 
 
 if __name__ == '__main__':
