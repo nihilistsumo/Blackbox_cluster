@@ -57,10 +57,10 @@ def main():
     parser.add_argument('-qr', '--qrels', default="base.train.cbor-toplevel.qrels")
     parser.add_argument('-pv', '--pvecs', default="y1train-all-paravec-dict.npy")
     parser.add_argument('-qv', '--qvecs', default="half-y1train-qry-attn-context-leadpara-qdict.npy")
-    parser.add_argument('-mp', '--model_path', default="saved_models/")
+    parser.add_argument('-mp', '--model_path', default="/home/sk1105/sumanta/BB_cluster/saved_models/lambda100_bestval.model")
     parser.add_argument('-emb', '--emb_size', type=int, default=768)
     parser.add_argument('-l', '--lambda_val', type=float, default=100.0)
-    parser.add_argument('-op', '--outpath', default="")
+    parser.add_argument('-op', '--outpath', default="/home/sk1105/sumanta/BB_cluster/saved_models/lambda100_bestval.model.cluster-labels.json")
 
     args = parser.parse_args()
     dat = args.data_dir
