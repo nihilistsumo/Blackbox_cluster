@@ -1,4 +1,4 @@
-from models import cluster
+from models import cluster, utils
 import torch
 import torch.nn as nn
 from torch import optim
@@ -20,18 +20,6 @@ def clustering_loss(true_label_batch, cand_label_batch, k=5):
     for i in range(len(true_label_batch)):
         loss += 1 - np.exp(k * adjusted_rand_score(true_label_batch[i], cand_label_batch[i]))
     return loss/len(true_label_batch)
-
-def read_art_qrels(art_qrels):
-    page_paras = {}
-    with open(art_qrels, 'r') as f:
-        for l in f:
-            q = l.split(' ')[0]
-            p = l.split(' ')[2]
-            if q not in page_paras.keys():
-                page_paras[q] = [p]
-            else:
-                page_paras[q].append(p)
-    return page_paras
 
 def build_data(page_paras, qrels, paravec_dict, qvec_dict, nosort, is_test=False, min_num_paras=10, min_nump_k=2.0, max_nump_k=4.0):
     rev_para_label_dict = {}
@@ -70,77 +58,6 @@ def build_data(page_paras, qrels, paravec_dict, qvec_dict, nosort, is_test=False
     print("Total " + str(len(sorted_pages)) + " pages")
     return X_data
 
-def calculate_avg_rand(cand_labels, true_labels):
-    avg_rand = 0
-    for i in range(len(cand_labels)):
-        gt = [l for l in true_labels[i]]
-        cand = [l for l in cand_labels[i]]
-        avg_rand += adjusted_rand_score(gt, cand)
-    avg_rand = avg_rand / len(cand_labels)
-    return avg_rand
-
-def true_cluster_labels(query_list, X_data):
-    max_paralist_len = max([len(X_data[q]) - 1 for q in query_list])
-    true_paired_clusters = np.zeros((len(query_list), max_paralist_len, max_paralist_len))
-    true_labels = []
-    for b in range(len(query_list)):
-        q = query_list[b]
-        true_batch_label = [d[2] for d in X_data[q][1:]] + [-1] * (max_paralist_len - len(X_data[q][1:]))
-        true_labels.append(true_batch_label)
-        for i in range(max_paralist_len):
-            for j in range(max_paralist_len):
-                if i == j or true_batch_label[i] == true_batch_label[j]:
-                    true_paired_clusters[b][i][j] = 1.0
-    return torch.from_numpy(true_paired_clusters).float(), torch.from_numpy(np.array(true_labels)).float()
-
-def prepare_batch(batch_queries, X_data, emb_size):
-    X_batch = []
-    true_batch_labels = []
-    max_paralist_len = max([len(X_data[q]) - 1 for q in batch_queries])
-    num_paras = []
-    num_k = []
-    mean_para_per_k = []
-    for q in batch_queries:
-        #print(q)
-        true_batch_label = [d[2] for d in X_data[q][1:]] + [-1] * (max_paralist_len - len(X_data[q][1:]))
-        num_clusters = len(list(set(true_batch_label)))
-        num_paras.append(len(X_data[q][1:]))
-        num_k.append(num_clusters)
-        mean_para_per_k.append(len(X_data[q][1:])/num_clusters)
-        true_batch_labels.append(true_batch_label)
-        qvec = X_data[q][0]
-        paraids = []
-        paravecs = []
-        paravec_labels = []
-        for d in X_data[q][1:]:
-            paraids.append(d[0])
-            paravecs.append(d[1])
-            paravec_labels.append(d[2])
-        # print(q + " passage count: " + str(len(paraids)))
-        for i in range(max_paralist_len - len(X_data[q][1:])):
-            paraids.append("dummy"+str(i))
-            paravecs.append(np.zeros(emb_size))
-            paravec_labels.append(-1)
-        X_cats = []
-        parapair_ids = []
-        num_cluster_vec = np.zeros(3*emb_size)
-        num_cluster_vec[0] = num_clusters
-        X_cats.append(num_cluster_vec)
-        for i in range(len(paraids)):
-            for j in range(len(paraids)):
-                if i==j:
-                    X_cats.append(np.hstack((qvec, paravecs[i], paravecs[i])))
-                    parapair_ids.append(paraids[i] + '_' + paraids[i])
-                else:
-                    X_cats.append(np.hstack((qvec, paravecs[i], paravecs[j])))
-                    parapair_ids.append(paraids[i] + '_' + paraids[j])
-        X_batch.append(X_cats)
-    X_batch = np.array(X_batch)
-    stats = [np.mean(num_paras), np.std(num_paras)/np.sqrt(len(batch_queries)), np.mean(num_k),
-             np.std(num_k)/np.sqrt(len(batch_queries)), np.mean(mean_para_per_k),
-             np.std(mean_para_per_k)/np.sqrt(len(batch_queries))]
-    return torch.from_numpy(X_batch).float(), stats
-
 def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lambda_val, lrate, save):
     # X_train/val/test: The dataset will be of the following format
     # {query: [query_vec, (pid1, para vec 1, label 1), (pid2, para vec 2, label 2), ...]} without padding
@@ -155,17 +72,17 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     val_query_list = list(X_val.keys())
     test_query_list = list(X_test.keys())
     #test_query_list = random.sample(test_query_list, 16)
-    X_val_data, val_stats = prepare_batch(val_query_list, X_val, emb_size)
+    X_val_data, val_stats = utils.prepare_batch(val_query_list, X_val, emb_size)
     print("Val data mean para (serr) %.2f (%.2f), mean k (serr) %.2f (%.2f), mean para/k (serr) %.2f (%.2f)" % (val_stats[0], val_stats[1],
                                                                                            val_stats[2], val_stats[3],
                                                                                            val_stats[4], val_stats[5]))
-    true_val_paired_clusters, true_val_labels = true_cluster_labels(val_query_list, X_val)
+    true_val_paired_clusters, true_val_labels = utils.true_cluster_labels(val_query_list, X_val)
     # true_val_labels = true_val_labels.to(device)
-    X_test_data, test_stats = prepare_batch(test_query_list, X_test, emb_size)
+    X_test_data, test_stats = utils.prepare_batch(test_query_list, X_test, emb_size)
     print("Test data mean para (serr) %.2f (%.2f), mean k (serr) %.2f (%.2f), mean para/k (serr) %.2f (%.2f)" % (test_stats[0], test_stats[1],
                                                                                            test_stats[2], test_stats[3],
                                                                                            test_stats[4], test_stats[5]))
-    true_test_paired_clusters, true_test_labels = true_cluster_labels(test_query_list, X_test)
+    true_test_paired_clusters, true_test_labels = utils.true_cluster_labels(test_query_list, X_test)
     # true_test_labels = true_test_labels.to(device)
     m = cluster.CATSCluster(emb_size, lambda_val)
     m = m.to(device)
@@ -175,7 +92,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     best_val_rand = 0
     since_best_val = 0
     early_stopped = False
-    patience = 50
+    patience = 100
     init_batch_num = 100
     for e in range(epochs):
         print("epoch "+str(e+1)+"/"+str(epochs))
@@ -185,9 +102,9 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             m.train()
             opt.zero_grad()
             batch_queries = query_list[b*batch_size:(b+1)*batch_size]
-            X_batch, stats = prepare_batch(batch_queries, X_train, emb_size)
+            X_batch, stats = utils.prepare_batch(batch_queries, X_train, emb_size)
             X_batch = X_batch.to(device)
-            true_paired_clusters, _ = true_cluster_labels(batch_queries, X_train)
+            true_paired_clusters, _ = utils.true_cluster_labels(batch_queries, X_train)
             true_paired_clusters = true_paired_clusters.to(device)
             cand_paired_clusters = m(X_batch).to(device)
             loss = mse_loss(cand_paired_clusters, true_paired_clusters)
@@ -198,7 +115,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
             cand_val_paired_clusters = m(X_val_data).detach()
             cand_val_labels = m.predict_cluster_labels().detach()
             val_loss = mse_loss(cand_val_paired_clusters, true_val_paired_clusters)
-            val_rand = calculate_avg_rand(list(cand_val_labels.numpy()), list(true_val_labels.numpy()))
+            val_rand = utils.calculate_avg_rand(list(cand_val_labels.numpy()), list(true_val_labels.numpy()))
             print("Batch %d/%d mp(serr) %.2f (%.2f), mk(serr) %.2f (%.2f), mp/k(serr) %.2f (%.2f), Training loss: %.5f, Val loss: %.5f, "
                   "Val avg. AdjRAND: %.5f" % (b+1, num_batch, stats[0], stats[1], stats[2], stats[3], stats[4],
                                               stats[5], loss.item(), val_loss.item(), val_rand))
@@ -227,7 +144,7 @@ def train_cats_cluster(X_train, X_val, X_test, batch_size, epochs, emb_size, lam
     cand_test_paired_clusters = m(X_test_data).detach()
     cand_test_labels = m.predict_cluster_labels().detach()
     test_loss = mse_loss(cand_test_paired_clusters, true_test_paired_clusters).item()
-    test_adj_rand = calculate_avg_rand(list(cand_test_labels.numpy()), list(true_test_labels.numpy()))
+    test_adj_rand = utils.calculate_avg_rand(list(cand_test_labels.numpy()), list(true_test_labels.numpy()))
     print("Test loss: %.5f, Test avg. AdjRAND: %.5f" % (test_loss, test_adj_rand))
     if save:
         if not os.path.isdir('saved_models'):
@@ -265,10 +182,10 @@ def main():
 
     args = parser.parse_args()
     dat = args.data_dir
-    page_paras = read_art_qrels(dat+args.train_art_qrels)
+    page_paras = utils.read_art_qrels(dat+args.train_art_qrels)
     #val_page_paras = {k: page_paras[k] for k in random.sample(list(page_paras.keys()), 64)} #####
     #train_page_paras = {k: page_paras[k] for k in page_paras.keys() if k not in val_page_paras.keys()}
-    test_page_paras = read_art_qrels(dat+args.test_art_qrels)
+    test_page_paras = utils.read_art_qrels(dat+args.test_art_qrels)
     train_paravec_dict = np.load(dat + args.train_pvecs, allow_pickle=True)[()]
     test_paravec_dict = np.load(dat + args.test_pvecs, allow_pickle=True)[()]
     train_qvec_dict = np.load(dat + args.train_qvecs, allow_pickle=True)[()]
