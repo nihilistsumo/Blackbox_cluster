@@ -73,9 +73,9 @@ class CATS(nn.Module):
         self.z1 = torch.abs(self.Xp1 - self.Xq)
         self.z2 = torch.abs(self.Xp2 - self.Xq)
         self.zdiff = torch.abs(self.Xp1 - self.Xp2)
-        self.zp1 = torch.relu(self.LL2(self.LL1(self.Xp1)))
-        self.zp2 = torch.relu(self.LL2(self.LL1(self.Xp2)))
-        self.zql = torch.relu(self.LL2(self.LL1(self.Xq)))
+        self.zp1 = torch.relu(self.LL2(torch.relu(self.LL1(self.Xp1))))
+        self.zp2 = torch.relu(self.LL2(torch.relu(self.LL1(self.Xp2))))
+        self.zql = torch.relu(self.LL2(torch.relu(self.LL1(self.Xq))))
         self.zd = torch.abs(self.zp1 - self.zp2)
         self.zdqp1 = torch.abs(self.zp1 - self.zql)
         self.zdqp2 = torch.abs(self.zp2 - self.zql)
@@ -95,21 +95,75 @@ class CATS(nn.Module):
         y_pred = self.forward(X_test)
         return y_pred
 
+class QuerySiamese(nn.Module):
+    def __init__(self, emb_size):
+        super(QuerySiamese, self).__init__()
+        self.emb_size = emb_size
+        self.LL1 = nn.Linear(emb_size, 256)
+        self.LL2 = nn.Linear(256, 64)
+        self.LL3 = nn.Linear(emb_size, 256)
+        self.LL4 = nn.Linear(256, 64)
+
+    def forward(self, X):
+        '''
+
+        :param X: The input tensor is of shape (n X mC2 X 3*vec size) where m = num of paras for each query
+        :return s: Pairwise CATS scores of shape (n X mC2)
+        '''
+        self.Xq = X[:, :, :self.emb_size]
+        self.Xp1 = X[:, :, self.emb_size:2 * self.emb_size]
+        self.Xp2 = X[:, :, 2 * self.emb_size:]
+        self.Xp1z = torch.relu(self.LL2(torch.relu(self.LL1(self.Xp1))))
+        self.Xp2z = torch.relu(self.LL2(torch.relu(self.LL1(self.Xp2))))
+        self.Xqz = torch.relu(self.LL4(torch.relu(self.LL3(self.Xp1))))
+        self.Xqp1z = torch.einsum('bmi,bmj->bmij', (self.Xqz, self.Xp1z)).reshape((X.shape[0], X.shape[1], -1))
+        self.Xqp2z = torch.einsum('bmi,bmj->bmij', (self.Xqz, self.Xp2z)).reshape((X.shape[0], X.shape[1], -1))
+        self.Xqpz = torch.mean((self.Xqp1z - self.Xqp2z)**2, 2)
+
+        return self.Xqpz
+
+class QueryScaler(nn.Module):
+    def __init__(self, emb_size):
+        super(QueryScaler, self).__init__()
+        self.emb_size = emb_size
+        self.LL1 = nn.Linear(emb_size, 256, bias=False)
+        self.LL2 = nn.Linear(256, 128, bias=False)
+        self.LL3 = nn.Linear(emb_size, 256, bias=False)
+        self.LL4 = nn.Linear(256, 128, bias=False)
+        self.LL5 = nn.Linear(128, 1, bias=False)
+
+    def forward(self, X):
+        self.Xq = X[:, :, :self.emb_size]
+        self.Xp1 = X[:, :, self.emb_size:2 * self.emb_size]
+        self.Xp2 = X[:, :, 2 * self.emb_size:]
+        self.Xp1z = torch.relu(self.LL2(torch.relu(self.LL1(self.Xp1))))
+        self.Xp2z = torch.relu(self.LL2(torch.relu(self.LL1(self.Xp2))))
+        self.Xqz = torch.relu(self.LL4(torch.relu(self.LL3(self.Xq))))
+        self.Xpz = torch.abs(self.Xp1z - self.Xp2z)
+        self.Xpqz = self.Xqz * self.Xpz
+        self.dist = torch.tanh(torch.relu(self.LL5(self.Xpqz)))
+        self.dist = self.dist.reshape((-1, self.dist.shape[1]))
+
+        return self.dist
+
 class CATSCluster(nn.Module):
     def __init__(self, emb_size, lambda_val):
         super(CATSCluster, self).__init__()
         self.lambda_val = lambda_val
         self.cats = CATS(emb_size)
+        self.qsiam = QuerySiamese(emb_size)
+        self.qs = QueryScaler(emb_size)
         self.optim = OptimCluster()
 
     def forward(self, X_data):
         # X_data is of shape n X maxlen^2 X 3*emb
         # output is of shape n X maxlen X maxlen
         self.num_clusters = X_data[:, 0, 0].reshape(-1)
-        self.pairscores = self.cats(X_data[:, 1:, :])
+        self.pairscores = self.qs(X_data[:, 1:, :])
         num_batch = self.pairscores.shape[0]
         maxlen = int(np.sqrt(self.pairscores.shape[1]))
         self.batch_pairscore_matrix = self.pairscores.reshape((num_batch, maxlen, maxlen))
+        #print(self.batch_pairscore_matrix[5])
         self.batch_cluster_matrices = self.optim.apply(self.batch_pairscore_matrix, self.lambda_val, self.num_clusters)
         return self.batch_cluster_matrices
 
@@ -184,3 +238,23 @@ class CATSCluster(nn.Module):
             cluster_cand_labels[q] = cand_labels
         return cluster_cand_labels
         '''
+
+class DeepTransformCluster(nn.Module):
+    def __init__(self, emb_size, lambda_val):
+        super(DeepTransformCluster).__init__()
+        self.emb_size = emb_size
+        self.lambda_val = lambda_val
+        self.transform_mat = torch.zeros((emb_size, emb_size), requires_grad=True)
+        self.query_weight = torch.tensor([1.0, 0.0], requires_grad=True)
+        self.optim = OptimCluster()
+
+    def forward(self, X_data, qvecs, ks):
+        maxlen = X_data.shape[1]
+        X_paired_dist_mat = torch.cdist(X_data, X_data, p=2)
+        scaling_vecs = torch.matmul(qvecs, self.transform_mat)
+        scaling_vecs = scaling_vecs.unsqueeze(1).repeat((1, maxlen, 1))
+        X_scaled_dat = X_data * scaling_vecs
+        X_scaled_paired_dist_mat = torch.cdist(X_scaled_dat, X_scaled_dat, p=2)
+        X_comb_paired_dist_mat = self.query_weight[0] * X_paired_dist_mat + self.query_weight[1] * X_scaled_paired_dist_mat
+        self.batch_adj_mat = self.optim.apply(X_comb_paired_dist_mat, self.lambda_val, ks)
+        return self.batch_adj_mat
